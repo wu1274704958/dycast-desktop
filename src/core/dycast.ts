@@ -145,6 +145,8 @@ export interface CastGift {
   count?: number | string;
   // 礼物消息可能重复发送，0 表示第一次，未重复
   repeatEnd?: number;
+  /** 抖音原始连击组 ID，供下游将累计数量转换为增量 */
+  groupId?: string;
 }
 
 /**
@@ -177,6 +179,8 @@ export interface DyMessage {
   room?: LiveRoom;
   rank?: LiveRankItem[];
   timestamp?: number;
+  /** 抖音社交事件原始 action */
+  socialAction?: string;
 }
 
 export enum CastMethod {
@@ -809,7 +813,7 @@ export class DyCast {
           data.method = CastMethod.GIFT;
           data.user = this._getCastUser(message.user);
           data.toUser = this._getCastUser(message.toUser);
-          data.gift = this._getCastGift(message.gift, message.repeatCount || message.comboCount, message.repeatEnd);
+          data.gift = this._getCastGift(message.gift, message.repeatCount || message.comboCount, message.repeatEnd, message.groupId);
           break;
         case CastMethod.LIKE:
           message = d.like.decodeLikeMessage(payload);
@@ -829,6 +833,7 @@ export class DyCast {
           message = d.social.decodeSocialMessage(payload);
           data.method = CastMethod.SOCIAL;
           data.user = this._getCastUser(message.user);
+          data.socialAction = message.action;
           data.content = '关注了主播';
           data.room = { followCount: message.followCount };
           break;
@@ -933,7 +938,7 @@ export class DyCast {
    * @param data
    * @returns
    */
-  private _getCastGift(data?: GiftStruct, count?: string, end?: number): CastGift | undefined {
+  private _getCastGift(data?: GiftStruct, count?: string, end?: number, groupId?: string): CastGift | undefined {
     if (!data) return void 0;
     return {
       id: data.id,
@@ -943,7 +948,8 @@ export class DyCast {
       desc: data.describe,
       icon: data.image?.urlList?.[0],
       count: count,
-      repeatEnd: end
+      repeatEnd: end,
+      groupId
     };
   }
 

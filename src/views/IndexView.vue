@@ -289,13 +289,18 @@ const writeRecordedCasts = function (casts: DyMessage[]) {
  */
 const handleMessages = function (msgs: DyMessage[]) {
   const newCasts: DyMessage[] = [];
+  const relayCasts: DyMessage[] = [];
   const mainCasts: DyMessage[] = [];
   const otherCasts: DyMessage[] = [];
+  let shouldDisconnect = false;
   try {
     for (const msg of msgs) {
       if (!msg.id) continue;
+      // 连击终止帧和重复消息也交给下游按组处理；展示仍沿用原有过滤。
+      if (msg.method === CastMethod.GIFT) relayCasts.push(msg);
       const msgId = `${msg.method}-${msg.id}`;
       if (!addCastId(msgId)) continue;
+      if (msg.method !== CastMethod.GIFT) relayCasts.push(msg);
       switch (msg.method) {
         case CastMethod.CHAT:
           newCasts.push(msg);
@@ -337,7 +342,7 @@ const handleMessages = function (msgs: DyMessage[]) {
             // 已经下播
             newCasts.push(msg);
             otherCasts.push(msg);
-            disconnectLive();
+            shouldDisconnect = true;
           }
           break;
       }
@@ -350,9 +355,10 @@ const handleMessages = function (msgs: DyMessage[]) {
   if (castRef.value) castRef.value.appendCasts(mainCasts);
   if (otherRef.value) otherRef.value.appendCasts(otherCasts);
   if (relayWs && relayWs.isConnected()) {
-    const filtered = newCasts.filter((m): m is DyMessage & { method: CastMethod } => !!m.method && settings.relayFilter.includes(m.method));
+    const filtered = relayCasts.filter((m): m is DyMessage & { method: CastMethod } => !!m.method && settings.relayFilter.includes(m.method));
     if (filtered.length) relayWs.send(JSON.stringify(filtered));
   }
+  if (shouldDisconnect) disconnectLive();
 };
 
 /**
@@ -401,6 +407,7 @@ const connectLive = function () {
       setRoomInputStatus(true);
       connectStatus.value = 1;
       setRoomInfo(info);
+      if (info && relayWs?.isConnected()) relayWs.send(JSON.stringify(info));
       addConsoleMessage('直播间已连接');
     });
     cast.on('error', err => {
